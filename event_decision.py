@@ -71,7 +71,7 @@ class EventDecision(object):
         self._event = event
         self._prediction_model = prediction_model
 
-    def _temperature_factor(self, humidity, ):
+    def _temperature_factor(self):
         """
         Determines how advisable it is to continue with the event based on
         predicted temperature
@@ -79,6 +79,8 @@ class EventDecision(object):
         Return:
             (float) Temperature Factor
         """
+        high_temperature = None
+        low_temperature = None
         temperature_factor = None
         time = None
         outdoors = None
@@ -87,6 +89,9 @@ class EventDecision(object):
 
         temperature_factor = 0
         # adjusted_humidity =
+        adjusted_high_temperature = self._humidity_adjustment()
+        adjusted_low_temperature = self._humidity_adjustment()
+        # initial temperature factor
         if (((time >= 6 and time <= 19) and outdoors and (adjusted_high_temperature >= 30)) or (adjusted_high_temperature <= 45):
             temperature_factor=(adjusted_high_temperature / -5) + 6
         elif ((time >= 0 and time <= 5) or (time >= 20 and time <= 23)) and (adjusted_low_temperature < 5) and (adjusted_high_temperature < 45):
@@ -95,9 +100,33 @@ class EventDecision(object):
             temperature_factor=(
                 (adjusted_high_temperature - adjusted_low_temperature) / 5)
         else:
-            raise ValueError(f"Adjusted temperature outside of range.")
-            # temperature_factor=
+            temperature_factor=0
+        # final temperature factor
+
         return temperature_factor
+
+    def _humidity_adjustment(self, temperature):
+        """
+        Adjusts predicted temperature based on humidity, high or low temperatures.
+
+        Parameters:
+            humidity(int): Humidity as an int representing percentage
+            temperature(float): Adjusted temperature
+
+        Return:
+            adjusted_humidity_temperature(float): temperature after humidity adjustment
+        """
+
+        humidity_factor=0
+        adjusted_humidity_temperature=0
+        if humidity > 70:
+            humidity_factor=humidity/20
+            if temperature > 0:
+                return adjusted_humidity_temperature + humidity_factor
+            elif temperature < 0:
+                return adjusted_humidity_temperature - humidity_factor
+            else:
+                raise ValueError(f"Unknown temperature value.")
 
     def _rain_factor(self):
         """
@@ -116,6 +145,8 @@ class EventDecision(object):
             (float) Value in range of -5 to +5,
                     -5 is very bad, 0 is neutral, 5 is very beneficial
         """
+
+
         raise NotImplementedError
 
 
