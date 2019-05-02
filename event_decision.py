@@ -10,7 +10,7 @@
 __author__ = "Richard Roth"
 __email__ = "r.roth@uqconnect.edu.au"
 
-from weather_data import WeatherData
+from weather_data import WeatherData, WeatherDataItem
 from prediction import WeatherPrediction, YesterdaysWeather
 # Import your SimplePrediction and SophisticatedPrediction classes once defined.
 
@@ -68,8 +68,9 @@ class EventDecision(object):
                            An object of a subclass of WeatherPrediction used
                            to predict the weather for the event.
         """
-        self._event = event
-        self._prediction_model = prediction_model
+        self._event = UserInteraction.get_event_details
+        self._prediction_model = UserInteraction.get_prediction_model(
+            WeatherData)
 
     def _temperature_factor(self):
         """
@@ -79,54 +80,73 @@ class EventDecision(object):
         Return:
             (float) Temperature Factor
         """
-        high_temperature = None
-        low_temperature = None
         temperature_factor = None
-        time = None
-        outdoors = None
-        adjusted_high_temperature = None
-        adjusted_low_temperature = None
-
-        temperature_factor = 0
+        time = self._event.get_time()
+        outdoors = self._event.get_outdoors()
+        cover_available = self._event.get_cover_available()
+        adjusted_high_temperature = self._prediction_model.high_temperature()
+        adjusted_low_temperature = self._prediction_model.low_temperature()
+        wind_speed = self._prediction_model.wind_speed()
+        cloud_cover = self._prediction_model.cloud_cover()
         # adjusted_humidity =
-        adjusted_high_temperature = self._humidity_adjustment()
-        adjusted_low_temperature = self._humidity_adjustment()
+        adjusted_high_temperature = self._humidity_adjustment(
+            adjusted_high_temperature)
+        adjusted_low_temperature = self._humidity_adjustment(
+            adjusted_low_temperature)
         # initial temperature factor
-        if (((time >= 6 and time <= 19) and outdoors and (adjusted_high_temperature >= 30)) or (adjusted_high_temperature <= 45):
-            temperature_factor=(adjusted_high_temperature / -5) + 6
+        # rule 2a: time between 6 and 19 inclusive, event is outdoors and AHT is between 30 and 45; use formulla AHT / -5 + 6
+        if (((time >= 6 and time <= 19) and outdoors and (adjusted_high_temperature >= 30)) or (adjusted_high_temperature <= 45)):
+            temperature_factor = adjusted_high_temperature / -5 + 6
+        # rule 2b: AHT greater than or equal to 45; use formula AHT / -5 + 6
+        elif adjusted_high_temperature >= 45:
+            temperature_factor = adjusted_high_temperature / -5 + 6
+        # rule 2c: time between 0 and 5 inclusive or between 20 and 23 inclusive and ALT is less than five or AHT is greater than 45; use formula ALT / 5 - 1.1
         elif ((time >= 0 and time <= 5) or (time >= 20 and time <= 23)) and (adjusted_low_temperature < 5) and (adjusted_high_temperature < 45):
-            temperature_factor=(adjusted_low_temperature / 5) - 1.1
+            temperature_factor = (adjusted_low_temperature / 5) - 1.1
+        # rule 2d: ALT is greater than 15 and AHT is less than 30; use formula (AHT - ALT) / 5
         elif (adjusted_low_temperature > 15) and (adjusted_high_temperature < 30):
-            temperature_factor=(
+            temperature_factor = (
                 (adjusted_high_temperature - adjusted_low_temperature) / 5)
+        # all other cases; temperature factor is 0
         else:
-            temperature_factor=0
+            temperature_factor = 0
         # final temperature factor
-
+        # if initial temperature is negative then add 1 to the temperature factor if there is:
+        if temperature_factor < 0:
+            # cover available
+            if cover_available == True:
+                temperature_factor += 1
+            # wind speed is greater than 3 or less than 10
+            elif wind_speed > 3 or wind_speed < 10:
+                temperature_factor += 1
+            # cloud cover is greater than 4
+            elif cloud_cover > 4:
+                temperature_factor += 1
         return temperature_factor
 
     def _humidity_adjustment(self, temperature):
         """
-        Adjusts predicted temperature based on humidity, high or low temperatures.
+        Adjusts predicted temperature based on humidity.
 
         Parameters:
-            humidity(int): Humidity as an int representing percentage
-            temperature(float): Adjusted temperature
+            temperature(float): temperature to be adjusted
 
         Return:
             adjusted_humidity_temperature(float): temperature after humidity adjustment
         """
+        humidity = self._prediction_model.humidity()
 
-        humidity_factor=0
-        adjusted_humidity_temperature=0
+        adjusted_humidity_temperature = 0
         if humidity > 70:
-            humidity_factor=humidity/20
+            humidity_factor = humidity/20
             if temperature > 0:
                 return adjusted_humidity_temperature + humidity_factor
             elif temperature < 0:
                 return adjusted_humidity_temperature - humidity_factor
             else:
                 raise ValueError(f"Unknown temperature value.")
+        else:
+            return adjusted_humidity_temperature
 
     def _rain_factor(self):
         """
@@ -136,6 +156,31 @@ class EventDecision(object):
         Return:
             (float) Rain Factor
         """
+        chance_of_rain = self._prediction_model.chance_of_rain()
+        outdoors = self._event.get_outdoors()
+        cover_available = self._event.get_cover_available()
+        wind_speed = self._prediction_model.wind_speed()
+        rain_factor = 0
+        # calculate initial rain factor
+        # rule 1a: if COR less than 20%; use formula COR / -5 + 4
+        if chance_of_rain > 20:
+            rain_factor = chance_of_rain / -5 + 4
+        # rule 1b: if COR greater than 50%; use formula COR / -20 + 1
+        elif chance_of_rain < 50:
+            rain_factor = chance_of_rain / -20 + 1
+        # all other cases
+        else:
+            rain_factor = 0
+        # calculate final rain factor
+        # If event is outdoors and cover is available and wind speed is less than 5, then add 1 to RF
+        if outdoors == True and cover_available == True and wind_speed < 5:
+            rain_factor += 1
+        # If rain factors is less than 2 and wind speed is greater than 15; use formula (rain factor + (wind speed / -15))
+        elif rain_factor < 2 and wind_speed > 15:
+            (rain_factor + (wind_speed/-15))
+            # if rain factor less than -9 -> set to -9
+            if rain_factor < -9:
+                rain_factor = -9
         return rain_factor
 
     def advisability(self):
@@ -145,44 +190,48 @@ class EventDecision(object):
             (float) Value in range of -5 to +5,
                     -5 is very bad, 0 is neutral, 5 is very beneficial
         """
+        # calculate final temperature = rain factor + temp factor
+        final_temperature_factor = self._rain_factor() + self._temperature_factor()
+        # if final temp factor less than -5 -> set to -5
+        if final_temperature_factor < -5:
+            final_temperature_factor = -5
 
-
-        raise NotImplementedError
+        return final_temperature_factor
 
 
 class UserInteraction(object):
     """Simple textual interface to drive program."""
 
-    NAME_QUESTION=("What is the name of the event?")
+    NAME_QUESTION = ("What is the name of the event?")
 
-    OUTDOORS_QUESTION=("Is the event outdoors?")
+    OUTDOORS_QUESTION = ("Is the event outdoors?")
 
-    SHELTER_QUESTION=("Is there covered shelter?")
+    SHELTER_QUESTION = ("Is there covered shelter?")
 
-    TIME_QUESTION=("What time is the event?")
+    TIME_QUESTION = ("What time is the event?")
 
-    PREDICTION_MODEL_QUESTION=("Select the weather prediction model you wish to use:", [
-                                 "Yesterday's weather.", "Simple prediction.", "Sophisticated prediction."])
+    PREDICTION_MODEL_QUESTION = ("Select the weather prediction model you wish to use:", [
+        "Yesterday's weather.", "Simple prediction.", "Sophisticated prediction."])
 
-    CHECK_AGAIN_QUESTION=[
+    CHECK_AGAIN_QUESTION = [
         ('check', "Would you like to check again?", 'string_boolean')]
 
-    EVENT_QUESTIONS=[
+    EVENT_QUESTIONS = [
         ('name', NAME_QUESTION, 'string'),
         ('outdoors', OUTDOORS_QUESTION, 'string_boolean'),
         ('shelter', SHELTER_QUESTION, 'string_boolean'),
         ('time', TIME_QUESTION, 'integer')
     ]
 
-    PREDICTION_QUESTION=[
+    PREDICTION_QUESTION = [
         ('prediction model', PREDICTION_MODEL_QUESTION, 'numeric_option'),
     ]
 
     def __init__(self):
         """
         """
-        self._event=None
-        self._prediction_model=None
+        self._event = None
+        self._prediction_model = None
 
     def get_event_details(self):
         """Prompt the user to enter details for an event.
@@ -190,22 +239,22 @@ class UserInteraction(object):
         Return:
             (Event): An Event object containing the event details.
         """
-        responses={}
+        responses = {}
 
         for key, (self.question), type_ in self.EVENT_QUESTIONS:
             if type_ == 'string':
-                responses[key]=self.ask_question_string(self.question)
+                responses[key] = self.ask_question_string(self.question)
             elif type_ == 'integer':
-                responses[key]=self.ask_question_integer(self.question)
+                responses[key] = self.ask_question_integer(self.question)
             elif type_ == 'string_boolean':
-                responses[key]=self.ask_question_string_boolean(
+                responses[key] = self.ask_question_string_boolean(
                     self.question)
             else:
                 raise ValueError(f"Unknown question type: {type_}")
             print(end='')
-        new_event=Event(responses['name'], responses['outdoors'],
+        new_event = Event(responses['name'], responses['outdoors'],
                           responses['shelter'], responses['time'])
-        self._event=new_event
+        self._event = new_event
         return self._event
 
     def ask_question_string(self, question):
@@ -232,7 +281,7 @@ class UserInteraction(object):
         while True:
             try:
                 print(question, end=' ')
-                user_input=int(input())
+                user_input = int(input())
                 if isinstance(user_input, int) and user_input >= 0 and user_input <= 23:
                     return user_input
             except (ValueError):
@@ -252,8 +301,8 @@ class UserInteraction(object):
         while True:
             try:
                 print(question, end=' ')
-                user_input=input().casefold()
-                accepted_user_inputs={
+                user_input = input().casefold()
+                accepted_user_inputs = {
                     'yes', 'y', 'no', 'n'}
                 if user_input in accepted_user_inputs:
                     return user_input
@@ -276,9 +325,9 @@ class UserInteraction(object):
             print(question)
             for key, option in enumerate(options, start=1):
                 print(f"  {key}) {option}")
-            response=input("> ")
+            response = input("> ")
             try:
-                response=int(response)
+                response = int(response)
                 if 1 <= response <= len(options):
                     return options[response - 1]
             except (ValueError, IndexError):
@@ -294,22 +343,22 @@ class UserInteraction(object):
         Return:
             (WeatherPrediction): Object of the selected prediction model.
         """
-        responses={}
+        responses = {}
 
         for key, (self.question, self.options), type_ in self.PREDICTION_QUESTION:
             if type_ == "numeric_option":
-                responses[key]=self.ask_question_numeric_option(
+                responses[key] = self.ask_question_numeric_option(
                     self.question, self.options)
             else:
                 raise ValueError(f"Unknown question type: {type_}")
         print()
         # Error handling can be added to this method.
         if responses["prediction model"].casefold() == "yesterday's weather.":
-            self._prediction_model=YesterdaysWeather(weather_data)
+            self._prediction_model = YesterdaysWeather(weather_data)
         elif responses["prediction model"].casefold() == "simple prediction.":
-            self._prediction_model=YesterdaysWeather(weather_data)
+            self._prediction_model = YesterdaysWeather(weather_data)
         elif responses["prediction model"].casefold() == "sophisticated prediction.":
-            self._prediction_model=YesterdaysWeather(weather_data)
+            self._prediction_model = YesterdaysWeather(weather_data)
         else:
             raise IndexError(f"Error: Incorrect response. Try again.")
 
@@ -335,15 +384,15 @@ class UserInteraction(object):
         Return:
             (bool): True if user wants to check using another prediction model.
         """
-        responses={}
+        responses = {}
         for key, (self.question), type_ in self.CHECK_AGAIN_QUESTION:
             if type_ == "string boolean":
-                responses[key]=self.ask_question_string_boolean(
+                responses[key] = self.ask_question_string_boolean(
                     self.question)
             else:
                 raise ValueError(f"Unknown type: {type_}")
         print()
-        user_response=responses["check"]
+        user_response = responses["check"]
         if user_response.casefold() == "yes" or "y":
             return True
         else:
@@ -352,20 +401,20 @@ class UserInteraction(object):
 
 def main():
     """Main application's starting point."""
-    check_again=True
-    weather_data=WeatherData()
+    check_again = True
+    weather_data = WeatherData()
     weather_data.load("weather_data.csv")
-    user_interface=UserInteraction()
+    user_interface = UserInteraction()
 
     print("Let's determine how suitable your event is for the predicted weather.")
-    event=user_interface.get_event_details()
+    event = user_interface.get_event_details()
 
     while check_again:
-        prediction_model=user_interface.get_prediction_model(weather_data)
-        decision=EventDecision(event, prediction_model)
-        impact=decision.advisability()
+        prediction_model = user_interface.get_prediction_model(weather_data)
+        decision = EventDecision(event, prediction_model)
+        impact = decision.advisability()
         user_interface.output_advisability(impact)
-        check_again=user_interface.another_check()
+        check_again = user_interface.another_check()
 
 
 if __name__ == "__main__":
