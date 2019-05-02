@@ -363,13 +363,11 @@ class UserInteraction(object):
             self._n_days = int(input())
             self._prediction_model = SimplePrediction(
                 weather_data, self._n_days)
-            print(self._prediction_model)
         elif responses["prediction model"].casefold() == "sophisticated prediction.":
             print(self.N_DAYS_QUESTION, end=" ")
             self._n_days = int(input())
             self._prediction_model = SophisticatedPrediction(
                 weather_data, self._n_days)
-            print(self._prediction_model)
         else:
             raise IndexError(f"Error: Incorrect response. Try again.")
 
