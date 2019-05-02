@@ -10,8 +10,8 @@
 __author__ = "Richard Roth"
 __email__ = "r.roth@uqconnect.edu.au"
 
-from weather_data import WeatherData, WeatherDataItem
-from prediction import WeatherPrediction, YesterdaysWeather
+from weather_data import WeatherData
+from prediction import WeatherPrediction, YesterdaysWeather, SimplePrediction
 # Import your SimplePrediction and SophisticatedPrediction classes once defined.
 
 
@@ -68,9 +68,8 @@ class EventDecision(object):
                            An object of a subclass of WeatherPrediction used
                            to predict the weather for the event.
         """
-        self._event = UserInteraction.get_event_details
-        self._prediction_model = UserInteraction.get_prediction_model(
-            WeatherData)
+        self._event = event
+        self._prediction_model = prediction_model
 
     def _temperature_factor(self):
         """
@@ -356,7 +355,7 @@ class UserInteraction(object):
         if responses["prediction model"].casefold() == "yesterday's weather.":
             self._prediction_model = YesterdaysWeather(weather_data)
         elif responses["prediction model"].casefold() == "simple prediction.":
-            self._prediction_model = YesterdaysWeather(weather_data)
+            self._prediction_model = SimplePrediction(weather_data)
         elif responses["prediction model"].casefold() == "sophisticated prediction.":
             self._prediction_model = YesterdaysWeather(weather_data)
         else:
@@ -386,7 +385,7 @@ class UserInteraction(object):
         """
         responses = {}
         for key, (self.question), type_ in self.CHECK_AGAIN_QUESTION:
-            if type_ == "string boolean":
+            if type_ == "string_boolean":
                 responses[key] = self.ask_question_string_boolean(
                     self.question)
             else:
