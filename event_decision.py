@@ -11,7 +11,7 @@ __author__ = "Richard Roth"
 __email__ = "r.roth@uqconnect.edu.au"
 
 from weather_data import WeatherData
-from prediction import WeatherPrediction, YesterdaysWeather, SimplePrediction
+from prediction import WeatherPrediction, YesterdaysWeather, SimplePrediction, SophisticatedPrediction
 # Import your SimplePrediction and SophisticatedPrediction classes once defined.
 
 
@@ -226,11 +226,15 @@ class UserInteraction(object):
         ('prediction model', PREDICTION_MODEL_QUESTION, 'numeric_option'),
     ]
 
+    N_DAYS_QUESTION = (
+        "Enter how many days of data you wish to use for making the prediction:")
+
     def __init__(self):
         """
         """
         self._event = None
         self._prediction_model = None
+        self._n_days = None
 
     def get_event_details(self):
         """Prompt the user to enter details for an event.
@@ -324,7 +328,7 @@ class UserInteraction(object):
             print(question)
             for key, option in enumerate(options, start=1):
                 print(f"  {key}) {option}")
-            response = input("> ")
+            response = input(f"> ")
             try:
                 response = int(response)
                 if 1 <= response <= len(options):
@@ -355,13 +359,20 @@ class UserInteraction(object):
         if responses["prediction model"].casefold() == "yesterday's weather.":
             self._prediction_model = YesterdaysWeather(weather_data)
         elif responses["prediction model"].casefold() == "simple prediction.":
-            self._prediction_model = SimplePrediction(weather_data)
+            print(self.N_DAYS_QUESTION, end=" ")
+            self._n_days = int(input())
+            self._prediction_model = SimplePrediction(
+                weather_data, self._n_days)
+            print(self._prediction_model)
         elif responses["prediction model"].casefold() == "sophisticated prediction.":
-            self._prediction_model = YesterdaysWeather(weather_data)
+            print(self.N_DAYS_QUESTION, end=" ")
+            self._n_days = int(input())
+            self._prediction_model = SophisticatedPrediction(
+                weather_data, self._n_days)
+            print(self._prediction_model)
         else:
             raise IndexError(f"Error: Incorrect response. Try again.")
 
-        # Cater for other prediction models when they are implemented.
         return self._prediction_model
 
     def output_advisability(self, impact):
@@ -392,9 +403,9 @@ class UserInteraction(object):
                 raise ValueError(f"Unknown type: {type_}")
         print()
         user_response = responses["check"]
-        if user_response.casefold() == "yes" or "y":
+        if user_response.casefold() == "yes" or user_response.casefold() == "y":
             return True
-        else:
+        elif user_response.casefold() == "no" or user_response.casefold() == "n":
             return False
 
 
