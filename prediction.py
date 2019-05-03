@@ -8,8 +8,8 @@
 __author__ = "Richard Roth"
 __email__ = "r.roth@uqconnect.edu.au"
 
+# weather data imported from weather_data.py
 from weather_data import WeatherData
-
 
 class WeatherPrediction(object):
     """Superclass for all of the different weather prediction models."""
@@ -116,8 +116,6 @@ class YesterdaysWeather(WeatherPrediction):
         return self._yesterdays_weather.get_cloud_cover()
 
 
-# Your implementations of the SimplePrediction and SophisticatedPrediction
-# classes should go here.
 class SimplePrediction(WeatherPrediction):
     """Simple prediction model that predicts weather based on the average of the past n days' worth of data, where n is a parameter.
     """
@@ -135,33 +133,41 @@ class SimplePrediction(WeatherPrediction):
         if n_days > weather_data.size():
             n_days = weather_data.size()
         self._simple_prediction = self._weather_data.get_data(n_days)
-        self._base_value = self._simple_prediction[0]
+        self._yesterday_value = self._simple_prediction[0]
+        self._number_days = n_days
 
     def get_number_days(self):
         """(int) Returns number of days of data being used"""
-        n = 0
+        return self._number_days
+
+    def calculate_average(self, data):
+        """
+        Calculate the average value from the data
+
+        Parameters :
+            data (str): data gathered from WeatherData
+
+        Return:
+            (float) average
+        """
+        running_average = 0
         for row in self._simple_prediction:
-            n += 1
-        return int(n)
+            running_average += getattr(row, data)()
+        total_average = running_average/self._number_days
+        return total_average
 
     def chance_of_rain(self):
-        """(float) Calculates the average rainfall for the past n days"""
-        total_rainfall = 0
-        n = 0
-        # for each row get the rainfall, add it to total rainfall and increase n by 1
-        for row in self._simple_prediction:
-            total_rainfall = total_rainfall + \
-                self._simple_prediction[n].get_rainfall()
-            n += 1
-        total_rainfall = (total_rainfall/n) * 9
+        """(int) Calculates the average rainfall for the past n days"""
+        total_rainfall = self.calculate_average("get_rainfall")
+        total_rainfall *= 9
+        # value parameters
         if total_rainfall > 100:
             total_rainfall = 100
-
-        return int(total_rainfall)
+        return round(total_rainfall)
 
     def high_temperature(self):
         """(float) Returns the highest temperature in n days"""
-        max_temperature = self._base_value.get_high_temperature()
+        max_temperature = self._yesterday_value.get_high_temperature()
         n = 0
         # for each row in weather data find high temperature and compare it to max temperature
         for row in self._simple_prediction:
@@ -173,7 +179,7 @@ class SimplePrediction(WeatherPrediction):
 
     def low_temperature(self):
         """(float) Returns the lowest temperature in n days"""
-        min_temperature = self._base_value.get_low_temperature()
+        min_temperature = self._yesterday_value.get_low_temperature()
         n = 0
         # for each row in weather data find low temperature and compare it with min temperature
         for row in self._simple_prediction:
@@ -185,39 +191,15 @@ class SimplePrediction(WeatherPrediction):
 
     def humidity(self):
         """(int) Calculates average humidity over n days"""
-        total_humidity = 0
-        n = 0
-        # for each row get the humidity, add it to total humidity and increase n by 1
-        for row in self._simple_prediction:
-            total_humidity = total_humidity + \
-                self._simple_prediction[n].get_humidity()
-            n += 1
-        total_humidity = total_humidity / n
-        return int(total_humidity)
+        return round(self.calculate_average("get_humidity"))
 
     def cloud_cover(self):
         """(int) Calculates average cloud cover over n days"""
-        total_cloud_cover = 0
-        n = 0
-        # for each row get the cloud cover, add it to total total and increase n by 1
-        for row in self._simple_prediction:
-            total_cloud_cover = total_cloud_cover + \
-                self._simple_prediction[n].get_cloud_cover()
-            n += 1
-        total_cloud_cover = total_cloud_cover / n
-        return int(total_cloud_cover)
+        return round(self.calculate_average("get_cloud_cover"))
 
     def wind_speed(self):
         """(int) Calculates average wind speed over n days from average wind speed per pay."""
-        total_average_wind_speed = 0
-        n = 0
-        for row in self._simple_prediction:
-            total_average_wind_speed = total_average_wind_speed + self._simple_prediction[n].get_average_wind_speed(
-            )
-            n += 1
-        total_average_wind_speed = (
-            total_average_wind_speed / n) + (total_average_wind_speed % n > 0)
-        return int(total_average_wind_speed)
+        return round(self.calculate_average("get_average_wind_speed"))
 
 
 class SophisticatedPrediction(WeatherPrediction):
@@ -234,134 +216,100 @@ class SophisticatedPrediction(WeatherPrediction):
             weather_data.size() > 0
         """
         super().__init__(weather_data)
+        # restricts data set size
         if n_days > weather_data.size():
             n_days = weather_data.size()
         self._sophisticated_prediction = self._weather_data.get_data(n_days)
-        self._base_value = self._sophisticated_prediction[0]
+        self._yesterday_value = self._sophisticated_prediction[-1]
+        self._number_days = n_days
 
     def get_number_days(self):
         """(int) Returns number of days of data being used"""
-        n = 0
-        for row in self._sophisticated_prediction:
-            n += 1
-        return int(n)
+        return self._number_days
 
-    def air_pressure(self):
-        """(float) Calculates the average air pressure for the past n days"""
-        total_air_pressure = 0
-        n = 0
-        # for each row get the air pressure, add it to total air pressure and increase n by 1
+    def calculate_average(self, data):
+        """
+        Calculate the average value from the data
+
+        Parameters :
+            data (str): data gathered from WeatherData
+
+        Return:
+            (float) average
+        """
+        running_average = 0
+        # for each row in the data set, get appropriate value and use appropriate method
         for row in self._sophisticated_prediction:
-            total_air_pressure = total_air_pressure + self._sophisticated_prediction[n].get_air_pressure(
-            )
-            n += 1
-        total_air_pressure = total_air_pressure / n
-        return total_air_pressure
+            running_average += getattr(row, data)()
+        total_average = running_average/self._number_days
+        return total_average
+        
+    def air_pressure(self):
+        """(int) Calculates the average air pressure for the past n days."""
+        return round(self.calculate_average("get_air_pressure"))
 
     def chance_of_rain(self):
-        """(float) Calculates the average rainfall for the past n days"""
-        total_average_rainfall = 0
-        n = 0
+        """(int) Calculates the average rainfall for the past n days"""
+        total_average_rainfall = self.calculate_average("get_rainfall")
         easterly_wind_direction = ("NNE", "NE", "ENE", "E", "ESE", "SE", "SSE")
-        # for each row get the rainfall, add it to total rainfall and increase n by 1
-        for row in self._sophisticated_prediction:
-            total_average_rainfall = total_average_rainfall + \
-                self._sophisticated_prediction[n].get_rainfall()
-            n += 1
-        total_average_rainfall = (total_average_rainfall / n)
-        if self._sophisticated_prediction[0].get_air_pressure() < self.air_pressure():
+        # value parameters
+        if self._yesterday_value.get_air_pressure() < self.air_pressure():
             total_average_rainfall = total_average_rainfall * 10
-        elif self._sophisticated_prediction[0].get_air_pressure() >= self.air_pressure():
+        if self._yesterday_value.get_air_pressure() >= self.air_pressure():
             total_average_rainfall = total_average_rainfall * 7
-
-        if self._sophisticated_prediction[0].get_wind_direction() in easterly_wind_direction:
+        if self._yesterday_value.get_wind_direction() in easterly_wind_direction:
             total_average_rainfall = total_average_rainfall * 1.2
-
         if total_average_rainfall > 100:
             total_average_rainfall = 100
-        return total_average_rainfall
+        return round(total_average_rainfall)
 
     def high_temperature(self):
         """(float) Returns the highest temperature in n days"""
-        average_temperature = self._base_value.get_high_temperature()
-        n = 0
-        # for each row in weather data find high temperature and compare it to max temperature
-        for row in self._sophisticated_prediction:
-            if self._sophisticated_prediction[n].get_high_temperature() > average_temperature:
-                max_temperature = self._sophisticated_prediction[n].get_high_temperature(
-                )
-            n += 1
-        if self._sophisticated_prediction[0].get_air_pressure() > self.air_pressure():
-            average_temperature = average_temperature + 2
-        return average_temperature
+        total_average_temperature = self.calculate_average("get_high_temperature")
+        # value parameters
+        if self._yesterday_value.get_air_pressure() > self.air_pressure():
+            total_average_temperature = total_average_temperature + 2
+        return total_average_temperature
 
     def low_temperature(self):
         """(float) Returns the lowest temperature in n days"""
-        average_temperature = self._base_value.get_low_temperature()
-        n = 0
-        # for each row in weather data find low temperature and compare it with min temperature
-        for row in self._sophisticated_prediction:
-            if self._sophisticated_prediction[n].get_low_temperature() < average_temperature:
-                min_temperature = self._sophisticated_prediction[n].get_low_temperature(
-                )
-            n += 1
-        if self._sophisticated_prediction[0].get_air_pressure() < self.air_pressure():
-            average_temperature = average_temperature - 2
-        return average_temperature
+        total_average_temperature = self.calculate_average("get_low_temperature")
+        # value parameters
+        if self._yesterday_value.get_air_pressure() < self.air_pressure():
+            total_average_temperature = total_average_temperature - 2
+        return total_average_temperature
 
     def humidity(self):
         """(int) Calculates average humidity over n days"""
-        total_humidity = 0
-        n = 0
-        # for each row get the humidity, add it to total humidity and increase n by 1
-        for row in self._sophisticated_prediction:
-            total_humidity = total_humidity + \
-                self._sophisticated_prediction[n].get_humidity()
-            n += 1
-        total_humidity = total_humidity / n
-
-        if self._sophisticated_prediction[0].get_air_pressure() > self.air_pressure():
+        total_humidity = self.calculate_average("get_humidity")
+        # value parameters
+        if self._yesterday_value.get_air_pressure() < self.air_pressure():
             total_humidity += 15
-        elif self._sophisticated_prediction[0].get_air_pressure() < self.air_pressure():
+        if self._yesterday_value.get_air_pressure() > self.air_pressure():
             total_humidity -= 15
-
         if total_humidity > 100:
             total_humidity = 100
-        elif total_humidity < 0:
+        if total_humidity < 0:
             total_humidity = 0
-        return int(total_humidity)
+        return round(total_humidity)
 
     def cloud_cover(self):
         """(int) Calculates average cloud cover over n days"""
-        average_total_cloud_cover = 0
-        n = 0
-        # for each row get the cloud cover, add it to total total and increase n by 1
-        for row in self._sophisticated_prediction:
-            average_total_cloud_cover = average_total_cloud_cover + self._sophisticated_prediction[n].get_cloud_cover(
-            )
-            n += 1
-        average_total_cloud_cover = (
-            average_total_cloud_cover / n) + (average_total_cloud_cover % n > 0)
-
-        if self._sophisticated_prediction[0].get_air_pressure() < self.air_pressure():
+        average_total_cloud_cover = self.calculate_average("get_cloud_cover")
+        # value parameters
+        if self._yesterday_value.get_air_pressure() < self.air_pressure():
             average_total_cloud_cover = average_total_cloud_cover + 2
         if average_total_cloud_cover > 9:
             average_total_cloud_cover = 9
-        return average_total_cloud_cover
+        return round(average_total_cloud_cover)
 
     def wind_speed(self):
         """(int) Calculates average wind speed over n days from average wind speed per pay."""
-        total_average_wind_speed = 0
-        n = 0
-        for row in self._sophisticated_prediction:
-            total_average_wind_speed = total_average_wind_speed + self._sophisticated_prediction[n].get_average_wind_speed(
-            )
-            n += 1
-        total_average_wind_speed = (
-            total_average_wind_speed / n) + (total_average_wind_speed % n > 0)
-        if self._sophisticated_prediction[0].get_maximum_wind_speed() > (total_average_wind_speed * 4):
-            total_average_wind_speed * 1.2
-        return total_average_wind_speed
+        total_average_wind_speed = self.calculate_average("get_average_wind_speed")
+        # value parameters
+        if self._yesterday_value.get_maximum_wind_speed() > (total_average_wind_speed * 4):
+            total_average_wind_speed *= 1.2
+        return round(total_average_wind_speed)
 
 
 if __name__ == "__main__":
