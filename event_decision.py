@@ -93,14 +93,12 @@ class EventDecision(object):
         # adjusted_humidity: Rule 1
         if humidity > 70:
             humidity_factor = humidity/20
-            if high_temperature >= 0:
-                return adjusted_high_temperature + humidity_factor
-            elif low_temperature >= 0:
-                return adjusted_low_temperature + humidity_factor
-            elif high_temperature < 0:
-                return adjusted_high_temperature - humidity_factor
-            elif low_temperature < 0:
-                return adjusted_low_temperature - humidity_factor
+            if high_temperature >= 0 or low_temperature >= 0:
+                adjusted_high_temperature = adjusted_high_temperature + humidity_factor
+                adjusted_low_temperature = adjusted_low_temperature + humidity_factor
+            elif high_temperature < 0 or low_temperature < 0:
+                adjusted_high_temperature = adjusted_high_temperature - humidity_factor
+                adjusted_low_temperature = adjusted_low_temperature - humidity_factor
         elif humidity <= 70:
             humidity_factor = humidity
         # initial temperature factor
