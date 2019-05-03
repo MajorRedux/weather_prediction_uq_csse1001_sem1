@@ -54,7 +54,7 @@ class Event(object):
 
     def __str__(self):
         """String representation of event."""
-        return 'Event({0} @ {1},{2},{3})'.format(self._name, self._time, self._outdoors, self._cover_available)
+        return 'Event({0} @ {1}, {2}, {3})'.format(self._name, self._time, self._outdoors, self._cover_available)
 
 
 class EventDecision(object):
@@ -79,22 +79,33 @@ class EventDecision(object):
         Return:
             (float) Temperature Factor
         """
-        temperature_factor = None
+        temperature_factor = 0
         time = self._event.get_time()
         outdoors = self._event.get_outdoors()
         cover_available = self._event.get_cover_available()
-        adjusted_high_temperature = self._prediction_model.high_temperature()
-        adjusted_low_temperature = self._prediction_model.low_temperature()
+        high_temperature = self._prediction_model.high_temperature()
+        low_temperature = self._prediction_model.low_temperature()
+        adjusted_high_temperature = high_temperature
+        adjusted_low_temperature = low_temperature
         wind_speed = self._prediction_model.wind_speed()
         cloud_cover = self._prediction_model.cloud_cover()
-        # adjusted_humidity =
-        adjusted_high_temperature = self._humidity_adjustment(
-            adjusted_high_temperature)
-        adjusted_low_temperature = self._humidity_adjustment(
-            adjusted_low_temperature)
+        humidity = self._prediction_model.humidity()
+        # adjusted_humidity: Rule 1
+        if humidity > 70:
+            humidity_factor = humidity/20
+            if high_temperature >= 0:
+                return adjusted_high_temperature + humidity_factor
+            elif low_temperature >= 0:
+                return adjusted_low_temperature + humidity_factor
+            elif high_temperature < 0:
+                return adjusted_high_temperature - humidity_factor
+            elif low_temperature < 0:
+                return adjusted_low_temperature - humidity_factor
+        elif humidity <= 70:
+            humidity_factor = humidity
         # initial temperature factor
-        # rule 2a: time between 6 and 19 inclusive, event is outdoors and AHT is between 30 and 45; use formulla AHT / -5 + 6
-        if (((time >= 6 and time <= 19) and outdoors and (adjusted_high_temperature >= 30)) or (adjusted_high_temperature <= 45)):
+        # rule 2a: time between 6 and 19 inclusive, event is outdoors and AHT is between 30; use formula AHT / -5 + 6
+        if (time >= 6 and time <= 19) and outdoors and (adjusted_high_temperature >= 30):
             temperature_factor = adjusted_high_temperature / -5 + 6
         # rule 2b: AHT greater than or equal to 45; use formula AHT / -5 + 6
         elif adjusted_high_temperature >= 45:
@@ -123,30 +134,6 @@ class EventDecision(object):
                 temperature_factor += 1
         return temperature_factor
 
-    def _humidity_adjustment(self, temperature):
-        """
-        Adjusts predicted temperature based on humidity.
-
-        Parameters:
-            temperature(float): temperature to be adjusted
-
-        Return:
-            adjusted_humidity_temperature(float): temperature after humidity adjustment
-        """
-        humidity = self._prediction_model.humidity()
-
-        adjusted_humidity_temperature = 0
-        if humidity > 70:
-            humidity_factor = humidity/20
-            if temperature > 0:
-                return adjusted_humidity_temperature + humidity_factor
-            elif temperature < 0:
-                return adjusted_humidity_temperature - humidity_factor
-            else:
-                raise ValueError(f"Unknown temperature value.")
-        else:
-            return adjusted_humidity_temperature
-
     def _rain_factor(self):
         """
         Determines how advisable it is to continue with the event based on
@@ -162,10 +149,10 @@ class EventDecision(object):
         rain_factor = 0
         # calculate initial rain factor
         # rule 1a: if COR less than 20%; use formula COR / -5 + 4
-        if chance_of_rain > 20:
+        if chance_of_rain < 20:
             rain_factor = chance_of_rain / -5 + 4
         # rule 1b: if COR greater than 50%; use formula COR / -20 + 1
-        elif chance_of_rain < 50:
+        elif chance_of_rain > 50:
             rain_factor = chance_of_rain / -20 + 1
         # all other cases
         else:
@@ -173,7 +160,7 @@ class EventDecision(object):
         # calculate final rain factor
         # If event is outdoors and cover is available and wind speed is less than 5, then add 1 to RF
         if outdoors == True and cover_available == True and wind_speed < 5:
-            rain_factor += 1
+            rain_factor = rain_factor + 1
         # If rain factors is less than 2 and wind speed is greater than 15; use formula (rain factor + (wind speed / -15))
         elif rain_factor < 2 and wind_speed > 15:
             (rain_factor + (wind_speed/-15))
@@ -231,6 +218,10 @@ class UserInteraction(object):
 
     def __init__(self):
         """
+        Initialises UserInteraction class.
+
+        Parameters:
+
         """
         self._event = None
         self._prediction_model = None
@@ -308,7 +299,10 @@ class UserInteraction(object):
                 accepted_user_inputs = {
                     'yes', 'y', 'no', 'n'}
                 if user_input in accepted_user_inputs:
-                    return user_input
+                    if user_input == "yes" or user_input == "y":
+                        return True
+                    if user_input == "no" or user_input == "n":
+                        return False
             except (ValueError):
                 pass
             print(
